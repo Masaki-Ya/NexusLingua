@@ -19,11 +19,22 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [keyInput, setKeyInput] = useState(apiKey);
   const [statusMsg, setStatusMsg] = useState("");
+  const [alwaysOnTop, setAlwaysOnTop] = useState(() => localStorage.getItem("nexus_always_on_top") === "true");
 
   useEffect(() => {
     const win = getCurrentWindow();
     setWindowLabel(win.label);
+    
+    // アプリ起動時に最前面設定を反映
+    win.setAlwaysOnTop(alwaysOnTop).catch(console.error);
   }, []);
+
+  // 常に最前面設定が変更されたときの処理
+  useEffect(() => {
+    const win = getCurrentWindow();
+    win.setAlwaysOnTop(alwaysOnTop).catch(console.error);
+    localStorage.setItem("nexus_always_on_top", alwaysOnTop.toString());
+  }, [alwaysOnTop]);
 
   // APIキー変更時に使用可能なモデル一覧を取得
   useEffect(() => {
@@ -282,6 +293,17 @@ function App() {
             <p className="settings-desc">
               APIキーを設定し、使用するAIモデルを選択してください。
             </p>
+            
+            <div className="settings-field" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <label htmlFor="always-on-top-toggle" style={{ cursor: 'pointer', margin: 0 }}>常に最前面に表示する</label>
+              <input 
+                id="always-on-top-toggle"
+                type="checkbox" 
+                checked={alwaysOnTop}
+                onChange={(e) => setAlwaysOnTop(e.target.checked)}
+                style={{ width: 'auto', cursor: 'pointer', transform: 'scale(1.2)' }}
+              />
+            </div>
             
             <div className="settings-field">
               <label>使用モデル</label>
