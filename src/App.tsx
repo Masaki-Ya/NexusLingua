@@ -21,6 +21,14 @@ function App() {
   const [statusMsg, setStatusMsg] = useState("");
   const [alwaysOnTop, setAlwaysOnTop] = useState(() => localStorage.getItem("nexus_always_on_top") === "true");
   const [responseCache, setResponseCache] = useState<Record<Mode, string>>({ translate: "", summarize: "", explain: "" });
+  const [textShortcut, setTextShortcut] = useState(() => localStorage.getItem("nexus_text_shortcut") || "Alt+T");
+  const [captureShortcut, setCaptureShortcut] = useState(() => localStorage.getItem("nexus_capture_shortcut") || "Alt+S");
+
+  // ショートカット設定をRustに同期
+  useEffect(() => {
+    invoke("update_shortcuts", { text: textShortcut, capture: captureShortcut })
+      .catch((err) => console.error("Failed to update shortcuts:", err));
+  }, [textShortcut, captureShortcut]);
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -268,6 +276,25 @@ function App() {
     }
   };
 
+  const handleShortcutInput = (e: React.KeyboardEvent<HTMLInputElement>, setter: (val: string) => void, storageKey: string) => {
+    e.preventDefault();
+    const key = e.key;
+    if (key === "Control" || key === "Shift" || key === "Alt" || key === "Meta") return; // 修飾キー単体は無視
+
+    const modifiers = [];
+    if (e.ctrlKey || e.metaKey) modifiers.push("CommandOrControl");
+    if (e.altKey) modifiers.push("Alt");
+    if (e.shiftKey) modifiers.push("Shift");
+
+    const keyName = key.length === 1 ? key.toUpperCase() : key;
+    
+    if (modifiers.length > 0 || key.length === 1) {
+        const shortcutStr = [...modifiers, keyName].join("+");
+        setter(shortcutStr);
+        localStorage.setItem(storageKey, shortcutStr);
+    }
+  };
+
   const handleStartCapture = async () => {
     try {
       await invoke("start_capture");
@@ -305,6 +332,30 @@ function App() {
             <p className="settings-desc">
               APIキーを設定し、使用するAIモデルを選択してください。
             </p>
+
+            <div className="settings-field">
+              <label>テキスト翻訳 ショートカット</label>
+              <input 
+                type="text" 
+                value={textShortcut} 
+                onKeyDown={(e) => handleShortcutInput(e, setTextShortcut, "nexus_text_shortcut")}
+                readOnly
+                placeholder="クリックしてキーを入力"
+                style={{ cursor: "pointer", textAlign: "center", fontWeight: "bold" }}
+              />
+            </div>
+
+            <div className="settings-field">
+              <label>キャプチャ翻訳 ショートカット</label>
+              <input 
+                type="text" 
+                value={captureShortcut} 
+                onKeyDown={(e) => handleShortcutInput(e, setCaptureShortcut, "nexus_capture_shortcut")}
+                readOnly
+                placeholder="クリックしてキーを入力"
+                style={{ cursor: "pointer", textAlign: "center", fontWeight: "bold" }}
+              />
+            </div>
             
             <div className="settings-field" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <label htmlFor="always-on-top-toggle" style={{ cursor: 'pointer', margin: 0 }}>常に最前面に表示する</label>

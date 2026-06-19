@@ -77,56 +77,94 @@ fn start_capture(app_handle: AppHandle) {
     trigger_snipping_tool(app_handle);
 }
 
+// ショートカット状態を保持する構造体
+struct ShortcutStateData {
+    text_shortcut: String,
+    capture_shortcut: String,
+}
+
+#[tauri::command]
+fn update_shortcuts(app_handle: AppHandle, state: tauri::State<Mutex<ShortcutStateData>>, text: String, capture: String) -> Result<(), String> {
+    let mut shortcuts = state.lock().unwrap();
+    
+    // 全て登録解除
+    let _ = app_handle.global_shortcut().unregister_all();
+    
+    if let Ok(shortcut_t) = text.parse::<Shortcut>() {
+        let _ = app_handle.global_shortcut().register(shortcut_t);
+    }
+    if let Ok(shortcut_s) = capture.parse::<Shortcut>() {
+        let _ = app_handle.global_shortcut().register(shortcut_s);
+    }
+    
+    shortcuts.text_shortcut = text;
+    shortcuts.capture_shortcut = capture;
+    
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Mutex::new(ShortcutStateData {
+            text_shortcut: "Alt+T".to_string(),
+            capture_shortcut: "Alt+S".to_string(),
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
-                        if shortcut.key == Code::KeyT && shortcut.mods == Modifiers::ALT {
-                            // テキスト選択翻訳
-                            let handle = app.clone();
-                            std::thread::spawn(move || {
-                                if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
-                                    use enigo::Keyboard;
-                                    let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
-                                    let _ = enigo.key(enigo::Key::C, enigo::Direction::Press);
-                                    let _ = enigo.key(enigo::Key::C, enigo::Direction::Release);
-                                    let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
-                                }
+                        let state = app.state::<Mutex<ShortcutStateData>>();
+                        let shortcuts = state.lock().unwrap();
+                        
+                        let text_shortcut = shortcuts.text_shortcut.parse::<Shortcut>();
+                        let capture_shortcut = shortcuts.capture_shortcut.parse::<Shortcut>();
 
-                                std::thread::sleep(Duration::from_millis(150));
-                                let text = handle.clipboard().read_text().unwrap_or_default();
-                                let _ = handle.emit("text-selected", text);
+                        if let Ok(t_sc) = text_shortcut {
+                            if shortcut == &t_sc {
+                                // テキスト選択翻訳
+                                let handle = app.clone();
+                                std::thread::spawn(move || {
+                                    if let Ok(mut enigo) = enigo::Enigo::new(&enigo::Settings::default()) {
+                                        use enigo::Keyboard;
+                                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Press);
+                                        let _ = enigo.key(enigo::Key::C, enigo::Direction::Press);
+                                        let _ = enigo.key(enigo::Key::C, enigo::Direction::Release);
+                                        let _ = enigo.key(enigo::Key::Control, enigo::Direction::Release);
+                                    }
 
-                                if let Some(window) = handle.get_webview_window("main") {
-                                    let _ = window.show();
-                                    let _ = window.unminimize();
-                                    let _ = window.set_focus();
-                                }
-                            });
-                        } else if shortcut.key == Code::KeyS && shortcut.mods == Modifiers::ALT {
-                            // Snipping Tool を使った画像キャプチャ
-                            trigger_snipping_tool(app.clone());
+                                    std::thread::sleep(Duration::from_millis(150));
+                                    let text = handle.clipboard().read_text().unwrap_or_default();
+                                    let _ = handle.emit("text-selected", text);
+
+                                    if let Some(window) = handle.get_webview_window("main") {
+                                        let _ = window.show();
+                                        let _ = window.unminimize();
+                                        let _ = window.set_focus();
+                                    }
+                                });
+                                return;
+                            }
+                        }
+                        
+                        if let Ok(s_sc) = capture_shortcut {
+                            if shortcut == &s_sc {
+                                // Snipping Tool を使った画像キャプチャ
+                                trigger_snipping_tool(app.clone());
+                            }
                         }
                     }
                 })
                 .build(),
         )
         .setup(|app| {
-            // ショートカットの登録
-            let shortcut_t = "Alt+T".parse::<Shortcut>().unwrap();
-            let shortcut_s = "Alt+S".parse::<Shortcut>().unwrap();
-            
-            let _ = app.global_shortcut().register(shortcut_t);
-            let _ = app.global_shortcut().register(shortcut_s);
-
+            // 初期状態はフロントエンドから update_shortcuts が呼ばれるまでデフォルトを登録しない（またはデフォルトを登録する）
+            // ここでは安全のため何もしない（フロントエンドの useEffect がすぐに呼び出す想定）
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, start_capture])
+        .invoke_handler(tauri::generate_handler![greet, start_capture, update_shortcuts])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
