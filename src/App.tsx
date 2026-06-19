@@ -23,6 +23,7 @@ function App() {
   const [responseCache, setResponseCache] = useState<Record<Mode, string>>({ translate: "", summarize: "", explain: "" });
   const [textShortcut, setTextShortcut] = useState(() => localStorage.getItem("nexus_text_shortcut") || "Alt+T");
   const [captureShortcut, setCaptureShortcut] = useState(() => localStorage.getItem("nexus_capture_shortcut") || "Alt+S");
+  const [recordingShortcutFor, setRecordingShortcutFor] = useState<"text" | "capture" | null>(null);
 
   // ショートカット設定をRustに同期
   useEffect(() => {
@@ -35,13 +36,12 @@ function App() {
     setWindowLabel(win.label);
     
     // アプリ起動時に最前面設定を反映
-    win.setAlwaysOnTop(alwaysOnTop).catch(console.error);
+    invoke("set_window_always_on_top", { alwaysOnTop }).catch(console.error);
   }, []);
 
   // 常に最前面設定が変更されたときの処理
   useEffect(() => {
-    const win = getCurrentWindow();
-    win.setAlwaysOnTop(alwaysOnTop).catch(console.error);
+    invoke("set_window_always_on_top", { alwaysOnTop }).catch(console.error);
     localStorage.setItem("nexus_always_on_top", alwaysOnTop.toString());
   }, [alwaysOnTop]);
 
@@ -292,6 +292,7 @@ function App() {
         const shortcutStr = [...modifiers, keyName].join("+");
         setter(shortcutStr);
         localStorage.setItem(storageKey, shortcutStr);
+        setRecordingShortcutFor(null);
     }
   };
 
@@ -323,6 +324,36 @@ function App() {
         </div>
       </header>
 
+      {/* ショートカット入力モーダル */}
+      {recordingShortcutFor && (
+        <div className="shortcut-modal-overlay" onClick={() => setRecordingShortcutFor(null)}>
+          <div className="shortcut-modal" onClick={e => e.stopPropagation()}>
+            <h3>新しいショートカットを入力</h3>
+            <p className="shortcut-modal-desc">
+              キーボードを押すと記録されます。<br/>
+              （Escキーでキャンセル）
+            </p>
+            <input 
+              type="text" 
+              autoFocus
+              readOnly
+              className="shortcut-modal-input"
+              placeholder="キーボード入力待ち..."
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  setRecordingShortcutFor(null);
+                  return;
+                }
+                const setter = recordingShortcutFor === "text" ? setTextShortcut : setCaptureShortcut;
+                const storageKey = recordingShortcutFor === "text" ? "nexus_text_shortcut" : "nexus_capture_shortcut";
+                handleShortcutInput(e, setter, storageKey);
+              }}
+              onBlur={() => setRecordingShortcutFor(null)}
+            />
+          </div>
+        </div>
+      )}
+
       {/* メインレイアウト */}
       <div className="app-content">
         {/* 設定画面（オーバーレイ） */}
@@ -335,26 +366,18 @@ function App() {
 
             <div className="settings-field">
               <label>テキスト翻訳 ショートカット</label>
-              <input 
-                type="text" 
-                value={textShortcut} 
-                onKeyDown={(e) => handleShortcutInput(e, setTextShortcut, "nexus_text_shortcut")}
-                readOnly
-                placeholder="クリックしてキーを入力"
-                style={{ cursor: "pointer", textAlign: "center", fontWeight: "bold" }}
-              />
+              <div className="shortcut-display">
+                <span className="shortcut-text">{textShortcut}</span>
+                <button className="btn-secondary" onClick={() => setRecordingShortcutFor("text")}>変更</button>
+              </div>
             </div>
 
             <div className="settings-field">
               <label>キャプチャ翻訳 ショートカット</label>
-              <input 
-                type="text" 
-                value={captureShortcut} 
-                onKeyDown={(e) => handleShortcutInput(e, setCaptureShortcut, "nexus_capture_shortcut")}
-                readOnly
-                placeholder="クリックしてキーを入力"
-                style={{ cursor: "pointer", textAlign: "center", fontWeight: "bold" }}
-              />
+              <div className="shortcut-display">
+                <span className="shortcut-text">{captureShortcut}</span>
+                <button className="btn-secondary" onClick={() => setRecordingShortcutFor("capture")}>変更</button>
+              </div>
             </div>
             
             <div className="settings-field" style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
