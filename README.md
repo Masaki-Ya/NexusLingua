@@ -1,3 +1,7 @@
+<div align="center">
+  <img src="doc/app-icon.png" alt="NexusLingua Logo" width="128" />
+</div>
+
 # NexusLingua
 
 超軽量・高速なAI翻訳・アシスタントデスクトップアプリ。
