@@ -103,6 +103,14 @@ fn update_shortcuts(app_handle: AppHandle, state: tauri::State<Mutex<ShortcutSta
     Ok(())
 }
 
+#[tauri::command]
+fn set_window_always_on_top(app_handle: AppHandle, always_on_top: bool) -> Result<(), String> {
+    if let Some(window) = app_handle.get_webview_window("main") {
+        window.set_always_on_top(always_on_top).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -164,7 +172,7 @@ pub fn run() {
             // ここでは安全のため何もしない（フロントエンドの useEffect がすぐに呼び出す想定）
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, start_capture, update_shortcuts])
+        .invoke_handler(tauri::generate_handler![greet, start_capture, update_shortcuts, set_window_always_on_top])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
