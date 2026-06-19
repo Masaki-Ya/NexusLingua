@@ -20,6 +20,7 @@ function App() {
   const [keyInput, setKeyInput] = useState(apiKey);
   const [statusMsg, setStatusMsg] = useState("");
   const [alwaysOnTop, setAlwaysOnTop] = useState(() => localStorage.getItem("nexus_always_on_top") === "true");
+  const [responseCache, setResponseCache] = useState<Record<Mode, string>>({ translate: "", summarize: "", explain: "" });
 
   useEffect(() => {
     const win = getCurrentWindow();
@@ -51,6 +52,7 @@ function App() {
       const text = event.payload;
       setCapturedImage(null); // 画像をクリア
       setSourceText(text);
+      setResponseCache({ translate: "", summarize: "", explain: "" }); // キャッシュクリア
       if (text.trim()) {
         executeAiAction(text, mode);
       }
@@ -61,6 +63,7 @@ function App() {
       const base64Img = event.payload;
       setSourceText(""); // テキストをクリア
       setCapturedImage(base64Img);
+      setResponseCache({ translate: "", summarize: "", explain: "" }); // キャッシュクリア
       executeImageAction(base64Img, mode);
     });
 
@@ -166,6 +169,7 @@ function App() {
       const resultText =
         data.candidates?.[0]?.content?.parts?.[0]?.text || "エラー: 翻訳結果を取得できませんでした。";
       setTranslatedText(resultText);
+      setResponseCache(prev => ({ ...prev, [currentMode]: resultText }));
     } catch (error: any) {
       console.error(error);
       setTranslatedText(`エラーが発生しました: ${error.message}`);
@@ -239,6 +243,7 @@ function App() {
       const resultText =
         data.candidates?.[0]?.content?.parts?.[0]?.text || "エラー: 画像からテキストを読み取れませんでした。";
       setTranslatedText(resultText);
+      setResponseCache(prev => ({ ...prev, [currentMode]: resultText }));
     } catch (error: any) {
       console.error(error);
       setTranslatedText(`画像翻訳中にエラーが発生しました: ${error.message}`);
@@ -249,6 +254,13 @@ function App() {
 
   const handleModeChange = (newMode: Mode) => {
     setMode(newMode);
+    
+    if (responseCache[newMode]) {
+      // キャッシュが存在する場合はAPIを呼ばずに即座に表示
+      setTranslatedText(responseCache[newMode]);
+      return;
+    }
+
     if (capturedImage) {
       executeImageAction(capturedImage, newMode);
     } else if (sourceText.trim()) {
@@ -360,7 +372,10 @@ function App() {
           {capturedImage ? (
             <div className="image-preview-container">
               <img src={capturedImage} alt="Captured" className="captured-preview" />
-              <button className="btn-clear-image" onClick={() => setCapturedImage(null)}>
+              <button className="btn-clear-image" onClick={() => {
+                setCapturedImage(null);
+                setResponseCache({ translate: "", summarize: "", explain: "" }); // キャッシュクリア
+              }}>
                 ✕ 画像をクリアしてテキスト入力に戻る
               </button>
             </div>
@@ -370,6 +385,7 @@ function App() {
               value={sourceText}
               onChange={(e) => {
                 setSourceText(e.target.value);
+                setResponseCache({ translate: "", summarize: "", explain: "" }); // キャッシュクリア
               }}
             />
           )}
